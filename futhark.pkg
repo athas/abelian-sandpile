@@ -1,0 +1,3 @@
+require {
+  github.com/diku-dk/lys 0.0.0-20190614060033+2dca9d6f782335508c3ab789084f8213db0a71d8
+}
