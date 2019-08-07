@@ -44,36 +44,34 @@ module zoom_wrapper (M: lys) : lys with text_content = M.text_content = {
                               , width = w
                               , height = h }
 
-  let step td s : state = s with inner = M.step td s.inner
-
-  let resize h w s : state = s with inner = M.resize h w s.inner
-                               with width = w
-                               with height = h
+  let zoom dy (s : state) =
+    s with scale = f32.min 1 (s.scale * (0.99**r32 dy))
 
   let move (dx, dy) (s: state) =
     s with centre = (s.centre.1 + dx * 0.1 * s.scale,
                      s.centre.2 + dy * 0.1 * s.scale)
 
-  let key e key s : state =
-    let s = match e
-            case #keydown -> if      key == SDLK_LEFT then move (-1, 0) s
-                             else if key == SDLK_RIGHT then move (1, 0) s
-                             else if key == SDLK_UP then move (0, -1) s
-                             else if key == SDLK_DOWN then move (0, 1) s
-                             else s
-            case _ -> s
-    in s with inner = M.key e key s.inner
-
-  let mouse mouse_state x y s : state =
-    let (x', y') = screen_point_to_world_point s.centre s.scale
+  let event (e: event) s =
+    match e
+    case #keydown {key} ->
+      let s' = if      key == SDLK_LEFT then move (-1, 0) s
+               else if key == SDLK_RIGHT then move (1, 0) s
+               else if key == SDLK_UP then move (0, -1) s
+               else if key == SDLK_DOWN then move (0, 1) s
+               else s
+      in s with inner = M.event e s'.inner
+    case #mouse {buttons, x, y} ->
+      let (x, y) = screen_point_to_world_point s.centre s.scale
                    (s.width, s.height) (s.width, s.height) (x,y)
-    in s with inner = M.mouse mouse_state x' y' s.inner
+      in s with inner = M.event (#mouse {buttons, x, y}) s.inner
+    case #wheel {dx=_, dy} ->
+      zoom dy s with inner = M.event e s.inner
+    case e ->
+      s with inner = M.event e s.inner
 
-  let zoom dy (s : state) =
-    s with scale = f32.min 1 (s.scale * (1.01**r32 dy))
-
-  let wheel dx dy s : state =
-    zoom dy s with inner = M.wheel dx dy s.inner
+  let resize h w s : state = s with inner = M.resize h w s.inner
+                               with width = w
+                               with height = h
 
   let render (s: state) =
     let screen = M.render s.inner
@@ -95,19 +93,23 @@ module lys : lys with text_content = () = zoom_wrapper {
   let init _ h w: state = {grid=replicate h (replicate w 0),
                            sinks = replicate h (replicate w false)
                                    with [h/2, w/2] = true}
-  let step [n][m] (_: f32) ({grid: [n][m]i32, sinks: [n][m]bool}) =
-    let maybe_drop grains sink = if sink then 4 else grains
-    let grid' = map2 (map2 maybe_drop) grid sinks
-    in {grid = step grid', sinks}
   let resize h w _ = init 0i32 h w
-  let key _ _ s = s
-  let mouse (mouse_state: i32) (x: i32) (y: i32) ({grid,sinks}: state) =
-    if mouse_state != 0
-    then {grid, sinks = copy sinks with [y,x] = true}
-    else {grid, sinks}
-  let wheel _ _ s = s
-  let grab_mouse = false
+
+  let event (e: event) (s: state) =
+    match e
+    case #step _ ->
+      let maybe_drop grains sink = if sink then 4 else grains
+      in s with grid = step (map2 (map2 maybe_drop) s.grid s.sinks)
+    case #mouse {buttons, x, y} ->
+      if buttons != 0
+      then s with sinks = (copy s.sinks with [y,x] = true)
+      else s
+    case _ ->
+      s
+
   let render (s: state) = map (map pixel) s.grid
+
+  let grab_mouse = false
   let text_format = ""
   let text_content _ _ = ()
   let text_colour _ = argb.black
