@@ -29,12 +29,12 @@ let screen_point_to_world_point ((centre_x, centre_y): (f32,f32)) (s: f32)
   in (x', y')
 
 module zoom_wrapper (M: lys) : lys with text_content = M.text_content = {
-  type state = { inner: M.state
-               , centre: (f32, f32)
-               , scale: f32
-               , width: i32
-               , height: i32
-               }
+  type~ state = { inner: M.state
+                , centre: (f32, f32)
+                , scale: f32
+                , width: i32
+                , height: i32
+                }
 
   type text_content = M.text_content
 
@@ -48,8 +48,8 @@ module zoom_wrapper (M: lys) : lys with text_content = M.text_content = {
     s with scale = f32.min 1 (s.scale * (0.99**r32 dy))
 
   let move (dx, dy) (s: state) =
-    s with centre = (s.centre.1 + dx * 0.1 * s.scale,
-                     s.centre.2 + dy * 0.1 * s.scale)
+    s with centre = (s.centre.0 + dx * 0.1 * s.scale,
+                     s.centre.1 + dy * 0.1 * s.scale)
 
   let event (e: event) s =
     match e
@@ -69,9 +69,9 @@ module zoom_wrapper (M: lys) : lys with text_content = M.text_content = {
     case e ->
       s with inner = M.event e s.inner
 
-  let resize h w s : state = s with inner = M.resize h w s.inner
-                               with width = w
-                               with height = h
+  let resize h w (s: state) = s with inner = M.resize h w s.inner
+                                with width = w
+                                with height = h
 
   let render (s: state) =
     let screen = M.render s.inner
@@ -87,8 +87,11 @@ module zoom_wrapper (M: lys) : lys with text_content = M.text_content = {
   let text_colour (s: state) = M.text_colour s.inner
 }
 
+let map2' [n] [m] 'a 'b 'c (f : a -> b -> c) (as: [n]a) (bs: [m]b) : [n]c =
+  map2 f as (bs :> [n]b)
+
 module lys : lys with text_content = () = zoom_wrapper {
-  type state = {grid:[][]i32, sinks: [][]bool}
+  type~ state = {grid:[][]i32, sinks: [][]bool}
   type text_content = ()
   let init _ h w: state = {grid=replicate h (replicate w 0),
                            sinks = replicate h (replicate w false)
@@ -99,7 +102,7 @@ module lys : lys with text_content = () = zoom_wrapper {
     match e
     case #step _ ->
       let maybe_drop grains sink = if sink then 4 else grains
-      in s with grid = step (map2 (map2 maybe_drop) s.grid s.sinks)
+      in s with grid = step (map2' (map2' maybe_drop) s.grid s.sinks)
     case #mouse {buttons, x, y} ->
       if buttons != 0
       then s with sinks = (copy s.sinks with [y,x] = true)
@@ -110,7 +113,7 @@ module lys : lys with text_content = () = zoom_wrapper {
   let render (s: state) = map (map pixel) s.grid
 
   let grab_mouse = false
-  let text_format = ""
+  let text_format () = ""
   let text_content _ _ = ()
   let text_colour _ = argb.black
 }
