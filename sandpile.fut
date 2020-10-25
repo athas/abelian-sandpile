@@ -1,6 +1,6 @@
 let step [n][m] (grid: [n][m]i32) : [n][m]i32 =
   let grains i j = if i >= 0 && i < n && j > 0 && j < m
-                   then unsafe grid[i,j]
+                   then grid[i,j]
                    else 0
   let on_cell i j =
     let mine = grains i j
@@ -19,21 +19,21 @@ import "lib/github.com/diku-dk/lys/lys"
 import "lib/github.com/athas/matte/colour"
 
 let pixel (grains: i32): argb.colour =
-  unsafe ([0xffffff, 0x00bfff, 0xffd700, 0xb03060, 0x000000])[i32.min grains 4]
+  ([0xffffff, 0x00bfff, 0xffd700, 0xb03060, 0x000000])[i32.min grains 4]
 
 let screen_point_to_world_point ((centre_x, centre_y): (f32,f32)) (s: f32)
-                                ((sw,sh): (i32,i32)) ((ww,wh): (i32,i32))
-                                ((x,y): (i32,i32)) =
-  let x' = t32 ((centre_x + s * (r32 (x-ww/2) / r32 sw)) * r32 ww)
-  let y' = t32 ((centre_y + s * (r32 (y-wh/2) / r32 sh)) * r32 wh)
+                                ((sw,sh): (i64,i64)) ((ww,wh): (i64,i64))
+                                ((x,y): (i64,i64)) =
+  let x' = t32 ((centre_x + s * (f32.i64 (x-ww/2) / f32.i64 sw)) * f32.i64 ww)
+  let y' = t32 ((centre_y + s * (f32.i64 (y-wh/2) / f32.i64 sh)) * f32.i64 wh)
   in (x', y')
 
 module zoom_wrapper (M: lys) : lys with text_content = M.text_content = {
   type~ state = { inner: M.state
                 , centre: (f32, f32)
                 , scale: f32
-                , width: i32
-                , height: i32
+                , width: i64
+                , height: i64
                 }
 
   type text_content = M.text_content
@@ -62,7 +62,7 @@ module zoom_wrapper (M: lys) : lys with text_content = M.text_content = {
       in s with inner = M.event e s'.inner
     case #mouse {buttons, x, y} ->
       let (x, y) = screen_point_to_world_point s.centre s.scale
-                   (s.width, s.height) (s.width, s.height) (x,y)
+                   (s.width, s.height) (s.width, s.height) (i64.i32 x, i64.i32 y)
       in s with inner = M.event (#mouse {buttons, x, y}) s.inner
     case #wheel {dx=_, dy} ->
       zoom dy s with inner = M.event e s.inner
@@ -78,7 +78,7 @@ module zoom_wrapper (M: lys) : lys with text_content = M.text_content = {
     let pixel y x =
       let (x',y') = screen_point_to_world_point s.centre s.scale
                     (s.width, s.height) (s.width, s.height) (x,y)
-      in unsafe screen[y', x']
+      in screen[y', x']
     in tabulate_2d s.height s.width pixel
 
   let grab_mouse = M.grab_mouse
